@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+# A tag push and a manual run for the same version shouldn't race to create the release
+concurrency: release
+
 jobs:
   release:
     runs-on: ubuntu-latest
