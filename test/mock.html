@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<!-- Minimal stand-in for pathofexile.com/trade2: same nav markup the content script hooks into.
+     The account tabs float right like the real site, so DOM order is reversed on screen. -->
+<style>
+body{margin:0;background:#3a3020;color:#ddd;font-family:serif}
+#trade{width:1100px;margin:40px auto}
+.navigation{display:flex;justify-content:space-between}
+.nav{list-style:none;margin:0;padding:0;display:flex;background:#000}
+.nav.account{display:block}
+.nav.account li{float:right}
+.nav li a{display:block;padding:8px 12px;color:#e2c38a;text-decoration:none;font-variant:small-caps}
+.nav li.active a{background:#3d2c14}
+</style>
+</head>
+<body>
+<div id="trade">
+  <div class="navigation">
+    <ul class="nav nav-tabs main"><li class="menu-search active"><a>Search Listed Items</a></li><li class="menu-exchange"><a>Bulk Item Exchange</a></li></ul>
+    <ul class="nav nav-tabs account"><li class="menu-about"><a>About</a></li><li class="menu-settings"><a>Settings</a></li></ul>
+  </div>
+  <div class="top">search panel</div>
+</div>
+<!-- Boot config in the same shape as the real page; type=text/plain so it doesn't execute -->
+<script type="text/plain">
+import('https://web.poecdn.com/dist/js/trade.x.js').then(({ default: app }) => { app.mount({"tab":"search","realm":"poe2","leagues":[{"id":"Forbidden Rites","realm":"poe2","text":"PoE2 - Forbidden Rites"},{"id":"Standard","realm":"poe2","text":"PoE2 - Standard"}],"basePath":"\/trade2"}); });
+</script>
+</body>
+</html>

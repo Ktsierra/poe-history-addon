@@ -1,0 +1,35 @@
+name: Release
+
+# Builds dist/ and publishes it as a GitHub release tagged v<manifest version>.
+# Run it from the Actions tab, or push a v<version> tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: bash scripts/build.sh
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(jq -r .version extension/manifest.json)
+          TAG="v$VERSION"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match manifest version $VERSION"
+            exit 1
+          fi
+          sed "s/__VERSION__/$VERSION/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" --target "$GITHUB_SHA" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
