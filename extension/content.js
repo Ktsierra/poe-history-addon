@@ -328,7 +328,7 @@
       const badges = flags.map(f => FLAG_BADGE[f]).filter(Boolean);
       maxBadges = Math.max(maxBadges, badges.length);
       const b = badges.map(x => `<span class="bdg">${x}</span>`).join('');
-      return `<div class="mod ${flags.map(f => 'f-' + f).join(' ')}">${b ? `<span class="bdgs">${b}</span>` : ''}${esc(text)}</div>`;
+      return `<div class="mod ${esc(flags.map(f => 'f-' + f).join(' '))}">${b ? `<span class="bdgs">${b}</span>` : ''}${esc(text)}</div>`;
     };
     const mods = (arr, extraFlag) => (arr || []).map(m => {
       const flags = Object.keys(m?.flags || {}).filter(k => m.flags[k]);

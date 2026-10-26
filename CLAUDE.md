@@ -2,7 +2,7 @@
 
 Browser extension (plus a userscript build) that restores the **Merchant History** tab GGG removed from the PoE2 trade site (`pathofexile.com/trade2`). Owner: Jose (GitHub `Ktsierra`). Distributed via GitHub releases; Firefox build goes to Firefox Add-ons (AMO).
 
-Current version: **0.3.0** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). v0.3.0 published as a GitHub release; not yet submitted to AMO.
+Current version: **0.3.1** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.1); AMO submission in progress.
 
 ## Layout
 
@@ -66,7 +66,7 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 ## Open items
 
-- Owner to test 0.3.0 on the live site in Firefox (content.fetch path) and Chrome.
+- Owner to test 0.3.1 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills`, `iconTierText` once a sale with them shows up.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.
