@@ -2,7 +2,7 @@
 
 Browser extension (plus a userscript build) that restores the **Merchant History** tab GGG removed from the PoE2 trade site (`pathofexile.com/trade2`). Owner: Jose (GitHub `Ktsierra`). Distributed via GitHub releases; Firefox build goes to Firefox Add-ons (AMO).
 
-Current version: **0.3.1** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.1); AMO submission in progress.
+Current version: **0.3.2** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.2); AMO submission in progress.
 
 ## Layout
 
@@ -38,7 +38,7 @@ README.md                 user-facing install instructions per browser
 
 - **Firefox:** content-script `fetch()` runs with the extension's principal; `content.fetch()` runs as the page so the session cookie is sent. `getJson()` uses `content.fetch` when available and parses `text()` itself to avoid Xray wrappers on page objects. This path has only been reasoned about, not tested in a real Firefox yet.
 - **Storage:** page `localStorage` (same origin for extension and userscript), keys `poeh:sales:<league>` (merged by `item_id|time`, newest first), `poeh:checked:<league>`, `poeh:league`. Sales accumulate so history outlives what the API returns.
-- All API strings go through `esc()` before `innerHTML`.
+- All API strings go through `esc()`. Markup is inserted with `setHtml()` (DOMParser + `replaceChildren`), not `innerHTML`, so `web-ext lint` stays clean. The only `innerHTML` left is the tab's static literal.
 - Constants at the top of `content.js`: `SHOW_ICONS`, `ICON_SIZE` (48).
 
 ## Decisions made with the owner
@@ -53,7 +53,7 @@ README.md                 user-facing install instructions per browser
 ## Firefox / AMO
 
 - `browser_specific_settings.gecko`: id `poe2-trade-history@ktsierra`, `strict_min_version` 140.0, `data_collection_permissions.required: ["none"]` (required for new AMO extensions since Nov 3, 2025); `gecko_android.strict_min_version` 142.0.
-- `npx web-ext lint --source-dir extension`: 0 errors, 2 `UNSAFE_VAR_ASSIGNMENT` warnings for `innerHTML`. Mention in AMO reviewer notes that every API value is escaped via `esc()`.
+- `npx web-ext lint --source-dir extension`: 0 errors, 0 warnings (since 0.3.2). Keep it that way: insert markup with `setHtml()`, never a dynamic `innerHTML`.
 
 ## Testing
 
@@ -66,7 +66,7 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 ## Open items
 
-- Owner to test 0.3.1 on the live site in Firefox (content.fetch path) and Chrome.
+- Owner to test 0.3.2 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills`, `iconTierText` once a sale with them shows up.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.

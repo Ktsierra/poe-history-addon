@@ -32,6 +32,8 @@
 
   // ---------- helpers ----------
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // All markup passed here is built from esc()'d values; parse it and swap the nodes in
+  const setHtml = (el, markup) => el.replaceChildren(...new DOMParser().parseFromString(markup, 'text/html').body.childNodes);
   const modText = m => {
     if (m == null || typeof m !== 'object') return m;
     const t = m.description ?? m.text ?? m.mod ?? m.value ?? m.name;
@@ -271,7 +273,7 @@
     if (state.sales.length) body += state.sales.map(rowHtml).join('');
     else if (!state.error) body += `<div class="poeh-msg">${state.loading ? 'Loading...' : 'No items sold.'}</div>`;
 
-    panel.innerHTML = `<div class="poeh-col">
+    setHtml(panel, `<div class="poeh-col">
       <div class="poeh-head">
         <div class="poeh-title">Merchant History</div>
         <select class="poeh-league">${opts}</select>
@@ -279,7 +281,7 @@
       </div>
       <div class="poeh-list">${body}</div>
       ${state.sales.length ? `<div class="poeh-foot"><span>${state.sales.length} sales saved locally</span><a class="poeh-csv">Export CSV</a></div>` : ''}
-    </div>`;
+    </div>`);
   }
 
   function onChange(e) {
@@ -308,7 +310,7 @@
     if (!s) return;
     if (tip.dataset.k !== keyOf(s)) {
       tip.dataset.k = keyOf(s);
-      tip.innerHTML = tipHtml(s.item || {});
+      setHtml(tip, tipHtml(s.item || {}));
     }
     tip.style.display = 'block';
     const pad = 16, r = tip.getBoundingClientRect();

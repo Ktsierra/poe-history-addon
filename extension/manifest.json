@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PoE2 Trade History",
   "short_name": "PoE2 History",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Restores the Merchant History tab on the Path of Exile 2 trade site. Not affiliated with or endorsed by Grinding Gear Games.",
   "homepage_url": "https://github.com/Ktsierra/poe-history-addon",
   "icons": {
