@@ -72,6 +72,8 @@ Bump `version` in `extension/manifest.json`, push, then run the **Release** work
 
 The history data comes from an internal trade site endpoint, the same one the original tab used. GGG can change or remove it at any time, and if they do, this breaks until it's updated.
 
+GGG only allows about 15 history requests per account every 3 hours, and going over locks history for an hour. So opening the tab only refreshes if your data is more than 15 minutes old (use the refresh button for a fresh copy), and the add-on holds off on any request that would go over the limit.
+
 ---
 
 This product isn't affiliated with or endorsed by Grinding Gear Games in any way.

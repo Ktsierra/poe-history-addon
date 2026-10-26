@@ -13,7 +13,15 @@
   const CDN = 'https://web.poecdn.com';
   const LS_SALES = 'poeh:sales:';
   const LS_CHECK = 'poeh:checked:';
-  const LS_LEAGUE = 'poeh:league';
+  const LS_FETCHED = 'poeh:fetched:';
+  const LS_PICKED = 'poeh:picked-league'; // only set when the user picks a league
+  const LS_LIMIT = 'poeh:limit';
+
+  // GGG limits the history endpoint per account, as max:period:penalty in seconds (updated
+  // from the response headers). Going over 15 per 3 hours locks it for an hour, and requests
+  // during the lockout still count, so opening the tab only refetches if the data is stale.
+  const DEFAULT_RULES = '5:60:60,10:600:120,15:10800:3600';
+  const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
   // Capture before the trade app rewrites /trade2/history to /trade2/search
   const openOnLoad = /^\/trade2\/history/.test(location.pathname);
@@ -28,6 +36,8 @@
     open: false,
     loading: false,
     error: '',
+    notice: '',
+    fetchedAt: 0,
   };
 
   // ---------- helpers ----------
@@ -67,14 +77,23 @@
     return { amount: p.amount ?? '', cur: p.currency ?? '' };
   };
   const currencyName = id => state.currencyNames[id] || titleCase(id);
+  const duration = ms => {
+    const s = Math.ceil(ms / 1000), min = Math.ceil(s / 60);
+    if (s < 90) return `${s} seconds`;
+    if (min < 90) return `${min} minutes`;
+    return min % 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min / 60}h`;
+  };
+  // The current challenge league: not permanent, hardcore, SSF, ruthless or private
+  const isChallenge = l => !/^(standard|hardcore)$/i.test(l.id) && !/\bhc\b|hardcore|ssf|solo self-found|ruthless|\(PL\d+\)/i.test(l.id);
 
   // Firefox content scripts run fetch() with the extension's principal; content.fetch()
   // runs it as the page, so the trade site session cookie is sent. Parse text ourselves
   // to avoid Xray wrappers on page-compartment JSON.
   const hasPageFetch = typeof browser !== 'undefined' && !!browser.runtime?.id
     && typeof content !== 'undefined' && typeof content?.fetch === 'function';
+  const pageFetch = url => (hasPageFetch ? content.fetch(url, { credentials: 'include' }) : fetch(url, { credentials: 'include' }));
   async function getJson(url) {
-    const r = hasPageFetch ? await content.fetch(url, { credentials: 'include' }) : await fetch(url, { credentials: 'include' });
+    const r = await pageFetch(url);
     if (r.status === 429) throw new Error(`Rate limited. Try again in ${r.headers.get('Retry-After') || 'a few'} seconds.`);
     return JSON.parse(await r.text());
   }
@@ -90,11 +109,53 @@
     return all;
   }
 
-  function selectLeague(id) {
+  function selectLeague(id, picked) {
     state.league = id;
-    lsSet(LS_LEAGUE, id);
+    if (picked) lsSet(LS_PICKED, id);
     state.sales = lsGet(LS_SALES + id, []);
     state.checked = new Set(lsGet(LS_CHECK + id, []));
+    state.fetchedAt = lsGet(LS_FETCHED + id, 0);
+    state.notice = '';
+  }
+
+  // ---------- rate limit ----------
+  // Log our history requests (in the site's localStorage, so every tab shares it) and never
+  // send one that would go over a rule.
+  const parseRules = s => String(s || '').split(',').map(r => r.split(':').map(Number))
+    .filter(r => r.length >= 2 && r.every(Number.isFinite));
+
+  function limitWaitMs() {
+    const lim = lsGet(LS_LIMIT, {}), now = Date.now();
+    const log = lim.log || [];
+    let wait = (lim.until || 0) - now;
+    for (const [max, period] of parseRules(lim.rules || DEFAULT_RULES)) {
+      const recent = log.filter(t => now - t < period * 1000);
+      if (recent.length >= max) wait = Math.max(wait, recent[recent.length - max] + period * 1000 - now);
+    }
+    return Math.max(0, wait);
+  }
+
+  function noteRequest() {
+    const lim = lsGet(LS_LIMIT, {});
+    lim.log = [...(lim.log || []), Date.now()];
+    lsSet(LS_LIMIT, lim);
+  }
+
+  function noteLimits(r) {
+    const lim = lsGet(LS_LIMIT, {}), now = Date.now();
+    lim.rules = r.headers.get('X-Rate-Limit-Account') || lim.rules || DEFAULT_RULES;
+    const longest = Math.max(10800, ...parseRules(lim.rules).map(x => x[1])) * 1000;
+    const log = (lim.log || []).filter(t => now - t < longest);
+    // The server's counts include other browsers; if it saw more than we logged, assume the
+    // extra requests just happened (the safe guess)
+    for (const [hits, period, penalty] of parseRules(r.headers.get('X-Rate-Limit-Account-State'))) {
+      for (let known = log.filter(t => now - t < period * 1000).length; known < hits; known++) log.push(now);
+      if (penalty) lim.until = Math.max(lim.until || 0, now + penalty * 1000);
+    }
+    const retry = Number(r.headers.get('Retry-After'));
+    if (r.status === 429 && retry) lim.until = Math.max(lim.until || 0, now + retry * 1000);
+    lim.log = log;
+    lsSet(LS_LIMIT, lim);
   }
 
   // ---------- data ----------
@@ -122,15 +183,38 @@
     } catch { /* names fall back to the id */ }
   }
 
-  async function fetchHistory() {
+  // force: the refresh button. Otherwise only fetch if this league's data is stale.
+  async function fetchHistory(force) {
     if (state.loading) return;
+    if (!force && Date.now() - state.fetchedAt < AUTO_REFRESH_MS) {
+      if (state.notice) { state.notice = ''; render(); }
+      return;
+    }
+    const wait = limitWaitMs();
+    if (wait) {
+      state.error = '';
+      state.notice = `Paused so GGG doesn't lock your account out of history. Refresh available in ${duration(wait)}.`;
+      render();
+      return;
+    }
+    const league = state.league;
     state.loading = true;
     state.error = '';
+    state.notice = '';
     render();
     try {
-      const j = await getJson(`${API}/history/${REALM}/${encodeURIComponent(state.league)}`);
+      noteRequest();
+      const r = await pageFetch(`${API}/history/${REALM}/${encodeURIComponent(league)}`);
+      noteLimits(r);
+      if (r.status === 429) throw new Error(`Rate limited by GGG. Refresh available in ${duration(limitWaitMs())}.`);
+      const j = JSON.parse(await r.text());
       if (j.error) throw new Error(j.error.message || `Error ${j.error.code}`);
-      state.sales = mergeSales(state.league, j.result || []);
+      const sales = mergeSales(league, j.result || []);
+      lsSet(LS_FETCHED + league, Date.now());
+      if (state.league === league) {
+        state.sales = sales;
+        state.fetchedAt = Date.now();
+      }
     } catch (e) {
       state.error = e.message || String(e);
     } finally {
@@ -270,8 +354,10 @@
     const opts = state.leagues.map(l => `<option value="${esc(l.id)}" ${l.id === state.league ? 'selected' : ''}>${esc(l.text || l.id)}</option>`).join('');
     let body = '';
     if (state.error) body += `<div class="poeh-msg err">${esc(state.error)}</div>`;
+    if (state.notice) body += `<div class="poeh-msg">${esc(state.notice)}</div>`;
     if (state.sales.length) body += state.sales.map(rowHtml).join('');
-    else if (!state.error) body += `<div class="poeh-msg">${state.loading ? 'Loading...' : 'No items sold.'}</div>`;
+    else if (!state.error && !state.notice) body += `<div class="poeh-msg">${state.loading ? 'Loading...' : 'No items sold.'}</div>`;
+    const updated = state.fetchedAt ? `, updated ${fromNow(state.fetchedAt)}` : '';
 
     setHtml(panel, `<div class="poeh-col">
       <div class="poeh-head">
@@ -280,13 +366,13 @@
         <button class="poeh-refresh" title="Refresh" ${state.loading ? 'disabled' : ''}>${ICON_REFRESH}</button>
       </div>
       <div class="poeh-list">${body}</div>
-      ${state.sales.length ? `<div class="poeh-foot"><span>${state.sales.length} sales saved locally</span><a class="poeh-csv">Export CSV</a></div>` : ''}
+      ${state.sales.length ? `<div class="poeh-foot"><span>${state.sales.length} sales saved locally${updated}</span><a class="poeh-csv">Export CSV</a></div>` : ''}
     </div>`);
   }
 
   function onChange(e) {
     if (e.target.classList.contains('poeh-league')) {
-      selectLeague(e.target.value);
+      selectLeague(e.target.value, true);
       render();
       fetchHistory();
     } else if (e.target.classList.contains('poeh-cb')) {
@@ -299,7 +385,7 @@
   }
 
   function onClick(e) {
-    if (e.target.closest('.poeh-refresh')) fetchHistory();
+    if (e.target.closest('.poeh-refresh')) fetchHistory(true);
     if (e.target.closest('.poeh-csv')) exportCsv();
   }
 
@@ -405,8 +491,9 @@
     document.body.appendChild(tip);
 
     state.leagues = readBootLeagues();
-    const saved = lsGet(LS_LEAGUE, null);
-    const first = state.leagues.find(l => l.id === saved)?.id || state.leagues[0]?.id || 'Standard';
+    const picked = lsGet(LS_PICKED, null);
+    const first = state.leagues.find(l => l.id === picked)?.id || state.leagues.find(isChallenge)?.id
+      || state.leagues[0]?.id || 'Standard';
     if (!state.leagues.length) state.leagues = [{ id: first, text: first }];
     selectLeague(first);
 

@@ -2,7 +2,7 @@
 
 Browser extension (plus a userscript build) that restores the **Merchant History** tab GGG removed from the PoE2 trade site (`pathofexile.com/trade2`). Owner: Jose (GitHub `Ktsierra`). Distributed via GitHub releases; Firefox build goes to Firefox Add-ons (AMO).
 
-Current version: **0.3.2** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.2); AMO submission in progress.
+Current version: **0.3.3** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.3); AMO submission in progress.
 
 ## Layout
 
@@ -29,15 +29,17 @@ README.md                 user-facing install instructions per browser
 - **Mods** are objects `{ description, flags: { desecrated: true, ... } }`, not strings. There is **no tier/affix data** (no `extended`, no `tier`). Text uses markup `[Tag|Display]` and `[Tag]`; `clean()` strips it.
 - Shapes **not yet confirmed with real data:** `veiledMods`, `grantedSkills`, `iconTierText`, `flavourText`, `descrText`, `craftedMods`/`fracturedMods`. The code handles strings or objects defensively.
 - Currency names/icons: `GET /api/trade2/data/static` -> `result[].entries[] { id, text, image }`.
-- League list: parsed from the inline boot script `app.mount({... "leagues": [...] ...})`, filtered to realm `poe2`.
+- League list: parsed from the inline boot script `app.mount({... "leagues": [...] ...})`, filtered to realm `poe2`. Standard can come first, so the default is the first league `isChallenge()` accepts (not Standard/Hardcore/HC/SSF/Ruthless/private), unless the user picked one in the dropdown.
+- **Rate limit (seen Oct 26 2026):** policy `trade-history-request-limit`, per account. `X-Rate-Limit-Account: 5:60:60,10:600:120,15:10800:3600` (max:period:penalty, seconds), state in `X-Rate-Limit-Account-State` (hits:period:active penalty), `Retry-After` on 429. Requests made during a lockout still count toward the windows, so a client that keeps retrying stays locked out. The old auto-fetch-on-every-open burned 20 requests in 3 hours of testing and got a 1h lockout.
 - **Nav:** the account tabs (`ul.nav.account`, About/Settings) float right, so DOM order is reversed on screen. Appending the tab puts it leftmost, before Settings, which is where the original sat. `placeTab()` also checks positions and prepends if the layout changes.
 - The site's CSS still styles `li.menu-history` and draws the original coins icon, so the tab has no icon of its own.
 - The trade app is Vue and re-renders the nav, so a MutationObserver re-injects the tab/panel if they disappear.
 
 ## Implementation notes
 
-- **Firefox:** content-script `fetch()` runs with the extension's principal; `content.fetch()` runs as the page so the session cookie is sent. `getJson()` uses `content.fetch` when available and parses `text()` itself to avoid Xray wrappers on page objects. This path has only been reasoned about, not tested in a real Firefox yet.
-- **Storage:** page `localStorage` (same origin for extension and userscript), keys `poeh:sales:<league>` (merged by `item_id|time`, newest first), `poeh:checked:<league>`, `poeh:league`. Sales accumulate so history outlives what the API returns.
+- **Firefox:** content-script `fetch()` runs with the extension's principal; `content.fetch()` runs as the page so the session cookie is sent. `pageFetch()` uses `content.fetch` when available and parses `text()` itself to avoid Xray wrappers on page objects. This path has only been reasoned about, not tested in a real Firefox yet.
+- **Storage:** page `localStorage` (same origin for extension and userscript), keys `poeh:sales:<league>` (merged by `item_id|time`, newest first), `poeh:checked:<league>`, `poeh:fetched:<league>` (last fetch time), `poeh:picked-league` (only written when the user picks one; the old `poeh:league` key was written on every load and is ignored now), `poeh:limit` (rate limit rules, request log, lockout end). Sales accumulate so history outlives what the API returns.
+- **Rate limiting:** opening the tab only fetches if that league's data is older than `AUTO_REFRESH_MS` (15 min); the refresh button forces it. Every history request is logged; `limitWaitMs()` blocks any request that would break a rule, and `noteLimits()` syncs with the server's state header (if the server counted more than the log, the extra hits are assumed to be from just now) and `Retry-After`. Blocked requests are never sent; the panel shows a notice with the wait.
 - All API strings go through `esc()`. Markup is inserted with `setHtml()` (DOMParser + `replaceChildren`), not `innerHTML`, so `web-ext lint` stays clean. The only `innerHTML` left is the tab's static literal.
 - Constants at the top of `content.js`: `SHOW_ICONS`, `ICON_SIZE` (48).
 
@@ -66,7 +68,7 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 ## Open items
 
-- Owner to test 0.3.2 on the live site in Firefox (content.fetch path) and Chrome.
+- Owner to test 0.3.3 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills`, `iconTierText` once a sale with them shows up.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.
