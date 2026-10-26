@@ -48,6 +48,7 @@ README.md                 user-facing install instructions per browser
 - Mod badges: **flag badges only** (`C` crafted, `F` fractured, `D` desecrated). Prefix/suffix tiers aren't in the data. Inferring tiers from bundled game data (RePoE PoE2 export at repoe-fork.github.io/poe2) was offered and **declined**; don't add it unless asked.
 - Filter box was removed for fidelity; CSV export and the saved-count live in a small footer.
 - No Chrome Web Store (fee). Chromium users "Load unpacked". Safari users run the userscript in the free Userscripts app; a real Safari extension needs Xcode plus the paid Apple Developer Program.
+- Distribution: Firefox via AMO, Chrome/Edge via the GitHub release zip (Load unpacked), Safari via the userscript. README only offers the userscript for Safari; don't pitch it for Firefox or other browsers.
 
 ## Firefox / AMO
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/: the extension zip (Firefox + Chrome/Edge) and the userscript (Safari, or any userscript manager).
+# Builds dist/: the extension zip (Firefox + Chrome/Edge) and the userscript (Safari).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -24,8 +24,6 @@ Grab the files from the [latest release](https://github.com/Ktsierra/poe-history
 
 Install it from Firefox Add-ons: _link coming once it's listed_.
 
-Until then, use the userscript with Violentmonkey or Tampermonkey (see [Any other browser](#any-other-browser-userscript)).
-
 ### Chrome, Edge, Brave, Opera
 
 Not on the Chrome Web Store, so it's installed manually:
@@ -43,13 +41,9 @@ To update: download the new zip, replace the folder contents, then click the rel
 Use the free **Userscripts** app from the App Store:
 
 1. Install [Userscripts](https://apps.apple.com/app/userscripts/id1463298887) and enable it in Safari's extension settings, allowing it on pathofexile.com.
-2. Download `poe2-trade-history.user.js` from the release.
+2. Download [`poe2-trade-history.user.js`](https://github.com/Ktsierra/poe-history-addon/releases/latest/download/poe2-trade-history.user.js) from the latest release.
 3. In Userscripts, create a new script, paste the file's contents, and save.
 4. Open the trade site and click **History**.
-
-### Any other browser (userscript)
-
-Works with [Violentmonkey](https://violentmonkey.github.io/) or Tampermonkey: open [`poe2-trade-history.user.js`](https://github.com/Ktsierra/poe-history-addon/releases/latest/download/poe2-trade-history.user.js) and the manager will offer to install it. It checks the same release URL for updates.
 
 ## Building
 
@@ -60,7 +54,7 @@ Works with [Violentmonkey](https://violentmonkey.github.io/) or Tampermonkey: op
 Outputs to `dist/`:
 
 - `poe2-trade-history-<version>.zip`: the extension (Firefox and Chromium browsers)
-- `poe2-trade-history.user.js`: the userscript (Safari and userscript managers)
+- `poe2-trade-history.user.js`: the userscript (Safari)
 
 The version comes from `extension/manifest.json`. Attach both files to a GitHub release; the userscript's update URL expects the asset name `poe2-trade-history.user.js`.
 
