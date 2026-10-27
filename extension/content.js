@@ -11,11 +11,12 @@
   const API = '/api/trade2';
   const REALM = 'poe2';
   const CDN = 'https://web.poecdn.com';
-  const LS_SALES = 'poeh:sales:';
-  const LS_CHECK = 'poeh:checked:';
-  const LS_FETCHED = 'poeh:fetched:';
-  const LS_PICKED = 'poeh:picked-league'; // only set when the user picks a league
-  const LS_LIMIT = 'poeh:limit';
+  // Saved data lives under poeh:<account>:<name>, see key()
+  const LS_SALES = 'sales:';
+  const LS_CHECK = 'checked:';
+  const LS_FETCHED = 'fetched:';
+  const LS_PICKED = 'picked-league'; // only set when the user picks a league
+  const LS_LIMIT = 'limit';
 
   // GGG limits the history endpoint per account, as max:period:penalty in seconds (updated
   // from the response headers). Going over 15 per 3 hours locks it for an hour, and requests
@@ -27,6 +28,7 @@
   const openOnLoad = /^\/trade2\/history/.test(location.pathname);
 
   const state = {
+    account: '',
     league: null,
     leagues: [],
     sales: [],
@@ -98,23 +100,43 @@
     return JSON.parse(await r.text());
   }
 
-  const lsGet = (k, def) => { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* blocked or full */ } };
+  // Several PoE accounts can share a browser, so saved data is per account. If the account
+  // can't be found nothing is saved, except the rate limit log (sharing that only errs safe).
+  const key = (name, always) => (state.account || always ? `poeh:${state.account}:${name}` : null);
+  const lsGet = (k, def) => { if (!k) return def; try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } };
+  const lsSet = (k, v) => { if (!k) return; try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* blocked or full */ } };
+
+  // "Logged in as <a href="/account/view-profile/Name-1234">Name#1234</a>" in the site header
+  const readAccount = () => document.querySelector('#statusBar .profile-link a, #statusBar a[href^="/account/view-profile/"]')
+    ?.textContent.trim() || '';
+
+  // Up to 0.3.3 nothing was keyed by account; hand that data to the first account seen
+  function migrateOldKeys() {
+    if (!state.account) return;
+    try {
+      const old = Object.keys(localStorage).filter(k => /^poeh:(sales|checked|fetched):|^poeh:(picked-league|limit|league)$/.test(k));
+      for (const k of old) {
+        const to = key(k.slice(5));
+        if (k !== 'poeh:league' && localStorage.getItem(to) == null) localStorage.setItem(to, localStorage.getItem(k));
+        localStorage.removeItem(k);
+      }
+    } catch { /* storage blocked */ }
+  }
 
   function mergeSales(league, fresh) {
-    const map = new Map(lsGet(LS_SALES + league, []).map(s => [keyOf(s), s]));
+    const map = new Map(lsGet(key(LS_SALES + league), []).map(s => [keyOf(s), s]));
     for (const s of fresh) map.set(keyOf(s), s);
     const all = [...map.values()].sort((a, b) => new Date(b.time) - new Date(a.time));
-    lsSet(LS_SALES + league, all);
+    lsSet(key(LS_SALES + league), all);
     return all;
   }
 
   function selectLeague(id, picked) {
     state.league = id;
-    if (picked) lsSet(LS_PICKED, id);
-    state.sales = lsGet(LS_SALES + id, []);
-    state.checked = new Set(lsGet(LS_CHECK + id, []));
-    state.fetchedAt = lsGet(LS_FETCHED + id, 0);
+    if (picked) lsSet(key(LS_PICKED), id);
+    state.sales = lsGet(key(LS_SALES + id), []);
+    state.checked = new Set(lsGet(key(LS_CHECK + id), []));
+    state.fetchedAt = lsGet(key(LS_FETCHED + id), 0);
     state.notice = '';
   }
 
@@ -125,7 +147,7 @@
     .filter(r => r.length >= 2 && r.every(Number.isFinite));
 
   function limitWaitMs() {
-    const lim = lsGet(LS_LIMIT, {}), now = Date.now();
+    const lim = lsGet(key(LS_LIMIT, true), {}), now = Date.now();
     const log = lim.log || [];
     let wait = (lim.until || 0) - now;
     for (const [max, period] of parseRules(lim.rules || DEFAULT_RULES)) {
@@ -136,13 +158,13 @@
   }
 
   function noteRequest() {
-    const lim = lsGet(LS_LIMIT, {});
+    const lim = lsGet(key(LS_LIMIT, true), {});
     lim.log = [...(lim.log || []), Date.now()];
-    lsSet(LS_LIMIT, lim);
+    lsSet(key(LS_LIMIT, true), lim);
   }
 
   function noteLimits(r) {
-    const lim = lsGet(LS_LIMIT, {}), now = Date.now();
+    const lim = lsGet(key(LS_LIMIT, true), {}), now = Date.now();
     lim.rules = r.headers.get('X-Rate-Limit-Account') || lim.rules || DEFAULT_RULES;
     const longest = Math.max(10800, ...parseRules(lim.rules).map(x => x[1])) * 1000;
     const log = (lim.log || []).filter(t => now - t < longest);
@@ -155,7 +177,7 @@
     const retry = Number(r.headers.get('Retry-After'));
     if (r.status === 429 && retry) lim.until = Math.max(lim.until || 0, now + retry * 1000);
     lim.log = log;
-    lsSet(LS_LIMIT, lim);
+    lsSet(key(LS_LIMIT, true), lim);
   }
 
   // ---------- data ----------
@@ -210,7 +232,7 @@
       const j = JSON.parse(await r.text());
       if (j.error) throw new Error(j.error.message || `Error ${j.error.code}`);
       const sales = mergeSales(league, j.result || []);
-      lsSet(LS_FETCHED + league, Date.now());
+      lsSet(key(LS_FETCHED + league), Date.now());
       if (state.league === league) {
         state.sales = sales;
         state.fetchedAt = Date.now();
@@ -366,7 +388,7 @@
         <button class="poeh-refresh" title="Refresh" ${state.loading ? 'disabled' : ''}>${ICON_REFRESH}</button>
       </div>
       <div class="poeh-list">${body}</div>
-      ${state.sales.length ? `<div class="poeh-foot"><span>${state.sales.length} sales saved locally${updated}</span><a class="poeh-csv">Export CSV</a></div>` : ''}
+      ${state.sales.length ? `<div class="poeh-foot"><span>${state.sales.length} sales ${state.account ? 'saved locally' : 'not saved (account not found)'}${updated}</span><a class="poeh-csv">Export CSV</a></div>` : ''}
     </div>`);
   }
 
@@ -380,7 +402,7 @@
       const k = keyOf(state.sales[+row.dataset.i]);
       if (e.target.checked) state.checked.add(k); else state.checked.delete(k);
       row.classList.toggle('done', e.target.checked);
-      lsSet(LS_CHECK + state.league, [...state.checked]);
+      lsSet(key(LS_CHECK + state.league), [...state.checked]);
     }
   }
 
@@ -490,8 +512,10 @@
     tip.className = 'poeh-tip';
     document.body.appendChild(tip);
 
+    state.account = readAccount();
+    migrateOldKeys();
     state.leagues = readBootLeagues();
-    const picked = lsGet(LS_PICKED, null);
+    const picked = lsGet(key(LS_PICKED), null);
     const first = state.leagues.find(l => l.id === picked)?.id || state.leagues.find(isChallenge)?.id
       || state.leagues[0]?.id || 'Standard';
     if (!state.leagues.length) state.leagues = [{ id: first, text: first }];

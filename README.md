@@ -14,7 +14,7 @@ Brings back the **Merchant History** tab on the [Path of Exile 2 trade site](htt
 
 ## Privacy
 
-Everything runs in your own browser, on pathofexile.com, using the session you're already logged in with. Nothing is sent anywhere else, and the extension never reads or stores your login. Sales are saved in the trade site's local storage on your machine.
+Everything runs in your own browser, on pathofexile.com, using the session you're already logged in with. Nothing is sent anywhere else, and the extension never reads or stores your login. Sales are saved in the trade site's local storage on your machine, separately for each PoE account.
 
 ## Install
 
