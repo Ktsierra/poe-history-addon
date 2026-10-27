@@ -115,16 +115,12 @@
   const readAccount = () => document.querySelector('#statusBar .profile-link a, #statusBar a[href^="/account/view-profile/"]')
     ?.textContent.trim() || '';
 
-  // Up to 0.3.3 nothing was keyed by account; hand that data to the first account seen
-  function migrateOldKeys() {
-    if (!state.account) return;
+  // Up to 0.3.3 nothing was keyed by account, so there's no telling whose that data is; drop it
+  // (sales come back on the next fetch)
+  function dropOldKeys() {
     try {
-      const old = Object.keys(localStorage).filter(k => /^poeh:(sales|checked|fetched):|^poeh:(picked-league|limit|league)$/.test(k));
-      for (const k of old) {
-        const to = key(k.slice(5));
-        if (k !== 'poeh:league' && localStorage.getItem(to) == null) localStorage.setItem(to, localStorage.getItem(k));
-        localStorage.removeItem(k);
-      }
+      Object.keys(localStorage).filter(k => /^poeh:(sales|checked|fetched):|^poeh:(picked-league|limit|league)$/.test(k))
+        .forEach(k => localStorage.removeItem(k));
     } catch { /* storage blocked */ }
   }
 
@@ -568,7 +564,7 @@
     document.body.appendChild(tip);
 
     state.account = readAccount();
-    migrateOldKeys();
+    dropOldKeys();
     state.leagues = readBootLeagues();
     const picked = lsGet(key(LS_PICKED), null);
     const first = state.leagues.find(l => l.id === picked)?.id || state.leagues.find(isChallenge)?.id
