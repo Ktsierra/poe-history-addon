@@ -49,7 +49,7 @@ README.md                 user-facing install instructions per browser
 
 - Match the original page's look: "Merchant History" title with underline, dark league dropdown, circular refresh icon, rows `Sold: <item> For: <n>x <Currency>` in small caps with `fromNow` times ("3 hours ago", "a day ago"), currency name in currency color. The original had no item icons; the owner wants them kept, at 48px.
 - Checkbox = "mark as reviewed" (dims row, saved per league). It's our own feature; what the original checkbox did is unknown.
-- Mod badges: **flag badges only** (`C` crafted, `F` fractured, `D` desecrated). Prefix/suffix tiers aren't in the data. Inferring tiers from bundled game data (RePoE PoE2 export at repoe-fork.github.io/poe2) was offered and **declined**; don't add it unless asked.
+- Mod badges: **flag badges only** (`C` crafted, `F` fractured, `D` desecrated). Prefix/suffix tiers aren't in the data. Inferring tiers from bundled game data (RePoE PoE2 export at repoe-fork.github.io/poe2) was offered and **declined**; don't add it unless asked. Prefix/suffix (P/S) badges came up again on Oct 27 2026 and the owner chose to **skip** them too: the history data has no affix info, and bundling or fetching game data wasn't worth it.
 - Filter box was removed for fidelity; CSV export and the saved-count live in a small footer.
 - No Chrome Web Store (fee). Chromium users "Load unpacked". Safari users run the userscript in the free Userscripts app; a real Safari extension needs Xcode plus the paid Apple Developer Program.
 - Distribution: Firefox via AMO, Chrome/Edge via the GitHub release zip (Load unpacked), Safari via the userscript. README only offers the userscript for Safari; don't pitch it for Firefox or other browsers.
@@ -72,7 +72,6 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 - Owner to test 0.3.4 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills` once a sale with them shows up.
-- Owner asked for prefix/suffix badges (Oct 27 2026), reversing the earlier "flag badges only" call. The history data has no affix info, so it needs game data (RePoE `mods.json` + `stat_translations.json`, mapping mod text to prefix/suffix). repoe-fork.github.io is blocked from the cloud sandbox. Waiting on the owner's choice of approach.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.
 
