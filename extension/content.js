@@ -5,6 +5,10 @@
 (() => {
   'use strict';
 
+  // One copy per page, even if the extension is loaded twice or also installed as a userscript
+  if (document.documentElement?.hasAttribute('data-poeh')) return;
+  document.documentElement?.setAttribute('data-poeh', '');
+
   const SHOW_ICONS = true; // item icon in each row (the original had none)
   const ICON_SIZE = 48;    // px
 
@@ -339,29 +343,38 @@
 
   let panel, tab, tip;
 
+  // The trade page can redraw itself from its own markup after load, which leaves copies of
+  // the tab and panel. So events are handled on document (see boot), and whatever tab and
+  // panel are on the page get adopted, de-duplicated and re-rendered.
   function ensureNav() {
     const acct = document.querySelector('#trade .navigation ul.nav.account');
     if (!acct) return false;
-    if (!acct.querySelector('.poeh-tab')) {
+    const tabs = [...document.querySelectorAll('#trade .poeh-tab')];
+    tabs.slice(1).forEach(el => el.remove());
+    if (tabs[0]) tab = tabs[0];
+    else {
       tab = document.createElement('li');
       tab.className = 'poeh-tab menu-history';
       tab.setAttribute('role', 'presentation');
       // The site still styles .menu-history (it draws the coins icon), so no icon of our own
       tab.innerHTML = `<a href="/trade2/history" data-target="history"><span>History</span></a>`;
-      tab.querySelector('a').addEventListener('click', e => { e.preventDefault(); openPanel(); });
       placeTab(acct);
-      if (state.open) tab.classList.add('active');
     }
-    if (!document.querySelector('#trade .poeh-panel')) {
-      panel = document.createElement('div');
-      panel.className = 'poeh-panel';
-      document.querySelector('#trade .navigation').after(panel);
-      panel.addEventListener('change', onChange);
-      panel.addEventListener('click', onClick);
-      panel.addEventListener('mousemove', onHover);
-      panel.addEventListener('mouseleave', () => (tip.style.display = 'none'));
+    if (tab.classList.contains('active') !== state.open) tab.classList.toggle('active', state.open);
+    const panels = [...document.querySelectorAll('#trade .poeh-panel')];
+    panels.slice(1).forEach(el => el.remove());
+    if (!panels[0] || panels[0] !== panel) {
+      if (panels[0]) panel = panels[0];
+      else {
+        panel = document.createElement('div');
+        panel.className = 'poeh-panel';
+        document.querySelector('#trade .navigation').after(panel);
+      }
+      if (tip) tip.style.display = 'none';
       render();
     }
+    if (tip && !tip.isConnected) document.body.appendChild(tip);
+    document.querySelectorAll('.poeh-tip').forEach(el => el !== tip && el.remove());
     return true;
   }
 
@@ -407,6 +420,7 @@
   }
 
   function render() {
+    if (panel && !panel.isConnected) { ensureNav(); return; } // the page replaced it; ensureNav adopts and renders
     if (!panel) return;
     const opts = state.leagues.map(l => `<option value="${esc(l.id)}" ${l.id === state.league ? 'selected' : ''}>${esc(l.text || l.id)}</option>`).join('');
     let body = '';
@@ -564,11 +578,18 @@
 
     loadCurrencyData().then(render);
 
-    // Close the panel when a native tab is clicked
+    // Our tab opens the panel; a native tab closes it
     document.addEventListener('click', e => {
       const li = e.target.closest('#trade .navigation li');
-      if (li && !li.classList.contains('poeh-tab')) closePanel();
+      if (li?.classList.contains('poeh-tab')) { e.preventDefault(); openPanel(); } else if (li) closePanel();
     }, true);
+    document.addEventListener('click', e => { if (e.target.closest?.('.poeh-panel')) onClick(e); });
+    document.addEventListener('change', e => { if (e.target.closest?.('.poeh-panel')) onChange(e); });
+    // Hide the tooltip whenever the mouse isn't over the panel, so it can't get stuck
+    document.addEventListener('mousemove', e => {
+      if (e.target.closest?.('.poeh-panel')) onHover(e);
+      else if (tip.style.display !== 'none') tip.style.display = 'none';
+    }, { passive: true });
     window.addEventListener('popstate', () => {
       if (location.pathname.startsWith('/trade2/history')) openPanel(); else closePanel();
     });

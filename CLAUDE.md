@@ -2,7 +2,7 @@
 
 Browser extension (plus a userscript build) that restores the **Merchant History** tab GGG removed from the PoE2 trade site (`pathofexile.com/trade2`). Owner: Jose (GitHub `Ktsierra`). Distributed via GitHub releases; Firefox build goes to Firefox Add-ons (AMO).
 
-Current version: **0.3.5** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.5); AMO submission in progress.
+Current version: **0.3.6** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.6); AMO submission in progress.
 
 ## Layout
 
@@ -36,6 +36,7 @@ README.md                 user-facing install instructions per browser
 - **Nav:** the account tabs (`ul.nav.account`, About/Settings) float right, so DOM order is reversed on screen. Appending the tab puts it leftmost, before Settings, which is where the original sat. `placeTab()` also checks positions and prepends if the layout changes.
 - The site's CSS still styles `li.menu-history` and draws the original coins icon, so the tab has no icon of its own.
 - The trade app is Vue and re-renders the nav, so a MutationObserver re-injects the tab/panel if they disappear.
+- **Redraws leave dead copies:** on the live site (0.3.5, Oct 27 2026) the panel froze after load: tooltip stuck on whatever was hovered during load, league dropdown did nothing. Reproduced exactly by redrawing `#trade` from its own markup (`t.innerHTML = t.innerHTML`), which leaves copies of the tab and panel without listeners. The exact trigger on the real page is unknown. `test/mock.html` now does that redraw 500ms after load.
 
 ## Implementation notes
 
@@ -44,6 +45,7 @@ README.md                 user-facing install instructions per browser
 - **League routing:** `mergeSales()` saves each sale under the league its `item.league` names (when that's a known league id), so a response that includes other leagues still lands in the right place. `loadSales()` moves sales saved under the wrong league back to their own one: up to 0.3.2, switching leagues while a fetch was loading saved Forbidden Rites sales under the new league, which made every league show FR items. If the league changes while a fetch is loading, `fetchHistory()` loads the new league when it finishes.
 - **Tooltip:** item fields go through `arr()` (non-arrays and nulls tolerated), and `onHover()` falls back to just the item name, with a console warning, if `tipHtml()` throws. 0.3.4 crashed on a mod list that wasn't an array.
 - **Rate limiting:** opening the tab only fetches if that league's data is older than `AUTO_REFRESH_MS` (15 min); the refresh button forces it. Every history request is logged; `limitWaitMs()` blocks any request that would break a rule, and `noteLimits()` syncs with the server's state header (if the server counted more than the log, the extra hits are assumed to be from just now) and `Retry-After`. Blocked requests are never sent; the panel shows a notice with the wait.
+- **Events and redraws:** all handlers live on `document` (click, change, mousemove), never on the tab or panel, so page-made copies still work. `ensureNav()` adopts whatever tab/panel is in `#trade`, removes duplicates and stray `.poeh-tip`s, and re-renders when the panel it holds isn't the one on the page; `render()` hands off to it if its panel got detached. The tooltip hides whenever the mouse isn't over the panel. `data-poeh` on `<html>` makes only the first copy of the script run per page (two loaded copies of the extension, or extension + userscript). Versions up to 0.3.5 don't check it, so old unpacked copies still run and each sends its own requests.
 - All API strings go through `esc()`. Markup is inserted with `setHtml()` (DOMParser + `replaceChildren`), not `innerHTML`, so `web-ext lint` stays clean. The only `innerHTML` left is the tab's static literal.
 - Constants at the top of `content.js`: `SHOW_ICONS`, `ICON_SIZE` (48).
 
@@ -72,7 +74,7 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 ## Open items
 
-- Owner to test 0.3.5 on the live site in Firefox (content.fetch path) and Chrome.
+- Owner to test 0.3.6 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills` once a sale with them shows up.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.

@@ -34,7 +34,7 @@ Not on the Chrome Web Store, so it's installed manually:
 4. Click **Load unpacked** and pick the unzipped folder (the one containing `manifest.json`).
 5. Open the trade site and click **History**.
 
-To update: download the new zip, replace the folder contents, then click the reload icon on the extension card.
+To update: download the new zip, replace the contents of that same folder, then click the reload icon on the extension card. Don't "Load unpacked" a new folder for each version, or several copies run at once (only one should be listed on the extensions page).
 
 ### Safari (Mac, iPhone, iPad)
 

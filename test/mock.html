@@ -28,5 +28,8 @@ body{margin:0;background:#3a3020;color:#ddd;font-family:serif}
 <script type="text/plain">
 import('https://web.poecdn.com/dist/js/trade.x.js').then(({ default: app }) => { app.mount({"tab":"search","realm":"poe2","leagues":[{"id":"Standard","realm":"poe2","text":"PoE2 - Standard"},{"id":"Hardcore","realm":"poe2","text":"PoE2 - Hardcore"},{"id":"Forbidden Rites","realm":"poe2","text":"PoE2 - Forbidden Rites"},{"id":"HC Forbidden Rites","realm":"poe2","text":"PoE2 - HC Forbidden Rites"}],"basePath":"\/trade2"}); });
 </script>
+<!-- The real page seems to redraw #trade from its own markup after load, leaving copies of the
+     injected tab and panel without listeners (stuck tooltip, dead league dropdown up to 0.3.5) -->
+<script>setTimeout(() => { const t = document.getElementById('trade'); t.innerHTML = t.innerHTML; }, 500);</script>
 </body>
 </html>
