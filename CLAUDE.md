@@ -2,7 +2,7 @@
 
 Browser extension (plus a userscript build) that restores the **Merchant History** tab GGG removed from the PoE2 trade site (`pathofexile.com/trade2`). Owner: Jose (GitHub `Ktsierra`). Distributed via GitHub releases; Firefox build goes to Firefox Add-ons (AMO).
 
-Current version: **0.3.4** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.4); AMO submission in progress.
+Current version: **0.3.5** (`extension/manifest.json` is the single source of the version). Repo: `Ktsierra/poe-history-addon` (public, MIT). Published as GitHub releases (latest v0.3.5); AMO submission in progress.
 
 ## Layout
 
@@ -41,6 +41,8 @@ README.md                 user-facing install instructions per browser
 
 - **Firefox:** content-script `fetch()` runs with the extension's principal; `content.fetch()` runs as the page so the session cookie is sent. `pageFetch()` uses `content.fetch` when available and parses `text()` itself to avoid Xray wrappers on page objects. This path has only been reasoned about, not tested in a real Firefox yet.
 - **Storage:** page `localStorage` (same origin for extension and userscript), all keyed per account as `poeh:<account>:<name>` via `key()`: `sales:<league>` (merged by `item_id|time`, newest first), `checked:<league>`, `fetched:<league>` (last fetch time), `picked-league` (only written when the user picks one), `limit` (rate limit rules, request log, lockout end; GGG's limit is per account too). If no account is found nothing is saved except the limit log, under `poeh::limit`. `migrateOldKeys()` moves pre-0.3.4 unkeyed data (`poeh:sales:<league>` etc.) to the first account seen and drops the old `poeh:league`. Sales accumulate so history outlives what the API returns.
+- **League routing:** `mergeSales()` saves each sale under the league its `item.league` names (when that's a known league id), so a response that includes other leagues still lands in the right place. `loadSales()` moves sales saved under the wrong league back to their own one: up to 0.3.2, switching leagues while a fetch was loading saved Forbidden Rites sales under the new league, which made every league show FR items. If the league changes while a fetch is loading, `fetchHistory()` loads the new league when it finishes.
+- **Tooltip:** item fields go through `arr()` (non-arrays and nulls tolerated), and `onHover()` falls back to just the item name, with a console warning, if `tipHtml()` throws. 0.3.4 crashed on a mod list that wasn't an array.
 - **Rate limiting:** opening the tab only fetches if that league's data is older than `AUTO_REFRESH_MS` (15 min); the refresh button forces it. Every history request is logged; `limitWaitMs()` blocks any request that would break a rule, and `noteLimits()` syncs with the server's state header (if the server counted more than the log, the extra hits are assumed to be from just now) and `Retry-After`. Blocked requests are never sent; the panel shows a notice with the wait.
 - All API strings go through `esc()`. Markup is inserted with `setHtml()` (DOMParser + `replaceChildren`), not `innerHTML`, so `web-ext lint` stays clean. The only `innerHTML` left is the tab's static literal.
 - Constants at the top of `content.js`: `SHOW_ICONS`, `ICON_SIZE` (48).
@@ -70,7 +72,7 @@ Must use `channel="chromium"` (full headless Chromium); the default headless she
 
 ## Open items
 
-- Owner to test 0.3.4 on the live site in Firefox (content.fetch path) and Chrome.
+- Owner to test 0.3.5 on the live site in Firefox (content.fetch path) and Chrome.
 - Check real shapes of `veiledMods`, `grantedSkills` once a sale with them shows up.
 - AMO submission, then put the listing link in README (placeholder text is there now). Release Firefox only installs signed add-ons, so the plain zip isn't enough for Firefox users. Unlisted AMO submission returns a signed `.xpi` that could go in the GitHub release instead.
 - Repo URLs live in manifest `homepage_url`, the `build.sh` userscript header, README and `.github/release-notes.md`. Update all of them if the repo is renamed. The userscript `@updateURL` expects the release asset name `poe2-trade-history.user.js`.

@@ -55,6 +55,7 @@
   const clean = s => String(modText(s) ?? '').replace(/\[([^|\]]+)\|([^\]]+)\]/g, '$2').replace(/\[([^\]]+)\]/g, '$1');
   const rarityClass = r => ({ Normal: 'n', Magic: 'm', Rare: 'r', Unique: 'u', Currency: 'c', Gem: 'g' }[r] || 'n');
   const keyOf = s => `${s.item_id}|${s.time}`;
+  const arr = v => (Array.isArray(v) ? v : v == null ? [] : [v]).filter(x => x != null);
   const titleCase = s => String(s).replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   // Same thresholds as moment.js fromNow(), which the original used
@@ -123,18 +124,47 @@
     } catch { /* storage blocked */ }
   }
 
+  // The league a sale belongs to, from its item. Unknown or missing names stay where they are.
+  const leagueOf = (s, fallback) => {
+    const l = s?.item?.league;
+    return l && state.leagues.some(x => x.id === l) ? l : fallback;
+  };
+
+  // Saves fresh sales under the league each item says it's from; returns the given league's list
   function mergeSales(league, fresh) {
-    const map = new Map(lsGet(key(LS_SALES + league), []).map(s => [keyOf(s), s]));
-    for (const s of fresh) map.set(keyOf(s), s);
-    const all = [...map.values()].sort((a, b) => new Date(b.time) - new Date(a.time));
-    lsSet(key(LS_SALES + league), all);
-    return all;
+    const groups = new Map([[league, []]]);
+    for (const s of fresh) {
+      const l = leagueOf(s, league);
+      if (!groups.has(l)) groups.set(l, []);
+      groups.get(l).push(s);
+    }
+    let result = [];
+    for (const [l, list] of groups) {
+      const map = new Map(lsGet(key(LS_SALES + l), []).map(s => [keyOf(s), s]));
+      for (const s of list) map.set(keyOf(s), s);
+      const all = [...map.values()].sort((a, b) => new Date(b.time) - new Date(a.time));
+      lsSet(key(LS_SALES + l), all);
+      if (l === league) result = all;
+    }
+    return result;
+  }
+
+  // Up to 0.3.2, switching leagues mid-fetch saved one league's sales under another;
+  // move any such sales back to their own league
+  function loadSales(league) {
+    const saved = lsGet(key(LS_SALES + league), []);
+    const mine = saved.filter(s => leagueOf(s, league) === league);
+    if (mine.length < saved.length) {
+      lsSet(key(LS_SALES + league), mine);
+      mergeSales(league, saved.filter(s => leagueOf(s, league) !== league));
+    }
+    return mine;
   }
 
   function selectLeague(id, picked) {
     state.league = id;
     if (picked) lsSet(key(LS_PICKED), id);
-    state.sales = lsGet(key(LS_SALES + id), []);
+    state.sales = loadSales(id);
     state.checked = new Set(lsGet(key(LS_CHECK + id), []));
     state.fetchedAt = lsGet(key(LS_FETCHED + id), 0);
     state.notice = '';
@@ -241,7 +271,12 @@
       state.error = e.message || String(e);
     } finally {
       state.loading = false;
-      render();
+      if (state.league !== league) {
+        // The league changed while this was loading: show what's saved for it and load it too
+        state.sales = loadSales(state.league);
+        render();
+        fetchHistory();
+      } else render();
     }
   }
 
@@ -418,7 +453,13 @@
     if (!s) return;
     if (tip.dataset.k !== keyOf(s)) {
       tip.dataset.k = keyOf(s);
-      setHtml(tip, tipHtml(s.item || {}));
+      let html;
+      try { html = tipHtml(s.item || {}); } catch (err) {
+        // Unexpected item data: show the name rather than nothing
+        console.warn('PoE2 Trade History: tooltip failed', err, s.item);
+        html = `<div class="h">${esc(clean(s.item?.name))} ${esc(clean(s.item?.typeLine || 'Unknown'))}</div>`;
+      }
+      setHtml(tip, html);
     }
     tip.style.display = 'block';
     const pad = 16, r = tip.getBoundingClientRect();
@@ -440,29 +481,29 @@
       const b = badges.map(x => `<span class="bdg">${x}</span>`).join('');
       return `<div class="mod ${esc(flags.map(f => 'f-' + f).join(' '))}">${b ? `<span class="bdgs">${b}</span>` : ''}${esc(text)}</div>`;
     };
-    const mods = (arr, extraFlag) => (arr || []).map(m => {
+    const mods = (list, extraFlag) => arr(list).map(m => {
       const flags = Object.keys(m?.flags || {}).filter(k => m.flags[k]);
       if (extraFlag && !flags.includes(extraFlag)) flags.push(extraFlag);
       return modLine(clean(m), flags);
     }).join('');
     // Unrevealed desecrated mods; the API may give a token like "DesecratedPrefix" or plain text
-    const veiled = (it.veiledMods || []).map(v => {
+    const veiled = arr(it.veiledMods).map(v => {
       const t = clean(v);
       const label = /prefix/i.test(t) ? 'Unrevealed Prefix' : /suffix/i.test(t) ? 'Unrevealed Suffix' : (t || 'Unrevealed Modifier');
       return modLine(label, ['desecrated', 'veiled']);
     }).join('');
 
     const sec = html => (html ? `<div class="sec">${html}</div>` : '');
-    const vals = p => (p?.values || []).map(v => (Array.isArray(v) ? v[0] : v)).join(', ');
+    const vals = p => arr(p?.values).map(v => (Array.isArray(v) ? v[0] : v)).join(', ');
     const propLine = p => {
       if (!p || typeof p !== 'object') return `<div class="p">${esc(clean(p))}</div>`;
       const name = clean(p.name ?? modText(p));
       return `<div class="p">${esc(name)}${vals(p) ? `: <b>${esc(clean(vals(p)))}</b>` : ''}</div>`;
     };
-    const props = (it.properties || []).map(propLine).join('');
-    const skills = (it.grantedSkills || []).map(propLine).join('');
-    const reqs = (it.requirements || []).map(r => `${esc(clean(r.name))} <b>${esc(vals(r))}</b>`).join(', ');
-    const runes = (it.sockets || []).filter(s => s.type === 'rune').length;
+    const props = arr(it.properties).map(propLine).join('');
+    const skills = arr(it.grantedSkills).map(propLine).join('');
+    const reqs = arr(it.requirements).map(r => `${esc(clean(r?.name))} <b>${esc(vals(r))}</b>`).join(', ');
+    const runes = arr(it.sockets).filter(s => s?.type === 'rune').length;
     const meta = (it.ilvl ? `<div class="p">Item Level: <b>${esc(it.ilvl)}</b></div>` : '')
       + (reqs ? `<div class="p">Requires: ${reqs}</div>` : '')
       + (runes ? `<div class="p">Rune Sockets: <b>${runes}</b></div>` : '');
